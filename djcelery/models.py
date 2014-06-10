@@ -33,10 +33,8 @@ class TaskMeta(models.Model):
     date_done = models.DateTimeField(_('done at'), auto_now=True)
     traceback = models.TextField(_('traceback'), blank=True, null=True)
     hidden = models.BooleanField(editable=False, default=False, db_index=True)
-    # TODO compression was enabled by mistake, we need to disable it
-    # but this is a backwards incompatible change that needs planning.
     meta = PickledObjectField(
-        compress=True, null=True, default=None, editable=False,
+        compress=False, null=True, default=None, editable=False
     )
 
     objects = managers.TaskManager()
