@@ -9,6 +9,8 @@ from django.db.models import signals
 from django.utils.translation import ugettext_lazy as _
 from django.conf import settings
 
+from django_extensions.db.fields import PostgreSQLUUIDField as UUIDField
+
 from celery import schedules
 from celery import states
 from celery.events.state import heartbeat_expires
@@ -24,7 +26,7 @@ TASK_STATE_CHOICES = zip(states.ALL_STATES, states.ALL_STATES)
 @python_2_unicode_compatible
 class TaskMeta(models.Model):
     """Task result/status."""
-    task_id = models.CharField(_('task id'), max_length=255, unique=True)
+    task_id = UUIDField(editable=False, primary_key=True, verbose_name=_('task id'))
     status = models.CharField(
         _('state'),
         max_length=50, default=states.PENDING, choices=TASK_STATE_CHOICES,
@@ -59,7 +61,7 @@ class TaskMeta(models.Model):
 @python_2_unicode_compatible
 class TaskSetMeta(models.Model):
     """TaskSet result"""
-    taskset_id = models.CharField(_('group id'), max_length=255, unique=True)
+    taskset_id = UUIDField(editable=False, primary_key=True, verbose_name=_('group id'))
     result = PickledObjectField()
     date_done = models.DateTimeField(_('created at'), auto_now=True)
     hidden = models.BooleanField(editable=False, default=False, db_index=True)
@@ -325,7 +327,7 @@ class TaskState(models.Model):
     state = models.CharField(
         _('state'), max_length=64, choices=TASK_STATE_CHOICES, db_index=True,
     )
-    task_id = models.CharField(_('UUID'), max_length=36, unique=True)
+    task_id = UUIDField(editable=False, primary_key=True, verbose_name=_('UUID'))
     name = models.CharField(
         _('name'), max_length=200, null=True, db_index=True,
     )
