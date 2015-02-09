@@ -1,7 +1,7 @@
 from __future__ import absolute_import, unicode_literals
 
 import uuid
-from datetime import timedelta, datetime
+from datetime import timedelta
 from time import time, mktime, gmtime
 
 from django.core.exceptions import MultipleObjectsReturned, ValidationError

@@ -81,14 +81,13 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='TaskMeta',
             fields=[
-                ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
-                ('task_id', models.CharField(unique=True, max_length=255, verbose_name='task id')),
+                ('task_id', models.UUIDField(max_length=32, primary_key=True, serialize=False, verbose_name='task id')),
                 ('status', models.CharField(default=b'PENDING', max_length=50, verbose_name='state', choices=[(b'FAILURE', b'FAILURE'), (b'PENDING', b'PENDING'), (b'RECEIVED', b'RECEIVED'), (b'RETRY', b'RETRY'), (b'REVOKED', b'REVOKED'), (b'STARTED', b'STARTED'), (b'SUCCESS', b'SUCCESS')])),
                 ('result', djcelery.picklefield.PickledObjectField(default=None, null=True, editable=False)),
                 ('date_done', models.DateTimeField(auto_now=True, verbose_name='done at')),
                 ('traceback', models.TextField(null=True, verbose_name='traceback', blank=True)),
                 ('hidden', models.BooleanField(default=False, db_index=True, editable=False)),
-                ('meta', djcelery.picklefield.PickledObjectField(default=None, null=True, editable=False)),
+                ('meta', djcelery.picklefield.PickledObjectField(compress=False, default=None, null=True, editable=False)),
             ],
             options={
                 'db_table': 'celery_taskmeta',
@@ -100,8 +99,7 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='TaskSetMeta',
             fields=[
-                ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
-                ('taskset_id', models.CharField(unique=True, max_length=255, verbose_name='group id')),
+                ('taskset_id', models.UUIDField(max_length=32, primary_key=True, serialize=False, verbose_name='group id')),
                 ('result', djcelery.picklefield.PickledObjectField(editable=False)),
                 ('date_done', models.DateTimeField(auto_now=True, verbose_name='created at')),
                 ('hidden', models.BooleanField(default=False, db_index=True, editable=False)),
@@ -116,9 +114,8 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='TaskState',
             fields=[
-                ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
+                ('task_id', models.UUIDField(max_length=32, primary_key=True, serialize=False, verbose_name='UUID')),
                 ('state', models.CharField(db_index=True, max_length=64, verbose_name='state', choices=[(b'FAILURE', b'FAILURE'), (b'PENDING', b'PENDING'), (b'RECEIVED', b'RECEIVED'), (b'RETRY', b'RETRY'), (b'REVOKED', b'REVOKED'), (b'STARTED', b'STARTED'), (b'SUCCESS', b'SUCCESS')])),
-                ('task_id', models.CharField(unique=True, max_length=36, verbose_name='UUID')),
                 ('name', models.CharField(max_length=200, null=True, verbose_name='name', db_index=True)),
                 ('tstamp', models.DateTimeField(verbose_name='event received at', db_index=True)),
                 ('args', models.TextField(null=True, verbose_name='Arguments')),
