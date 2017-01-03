@@ -5,6 +5,135 @@
 .. contents::
     :local:
 
+.. _version-3.2.0:
+
+3.2.0
+=====
+:release-date: TDB
+
+- Now compatible with Django 1.10
+
+- Dropped compatibility with Django 1.7 and earlier.
+
+    For older Django versions use ``django-celery`` 3.1.x
+
+- Prevented redundant migrations when using Python 3.
+
+    Fixes contributed by Ivan Larin and Vytis Banaitis.
+
+- Fixed task cleanup when TaskState has related models.
+
+    Fix contributed by georgewhewell.
+
+- Fixed Django 1.10 compatibility issue in scheduler
+
+    Fix contributed by Mathieu Fenniak.
+    
+- Fixed Django 1.10 compatibility issue in management commands
+
+    Fix contributed by Stranger6667, yjmade and Vytis Banaitis.
+
+- Fixed cache backend compatibility issue with Django 1.9
+
+    Fix contributed by Vytis Banaitis, with initial patch by Brandon Craft.
+
+- Fixed missing app label in Django admin.
+
+    Fix contributed by Rockallite Wulf.
+
+- Fix timezone handling in Camera and admin.
+
+    Fix contributed by Vytis Banaitis.
+
+- Added friendly API for dynamically creating/updating/deleting tasks
+
+    Fix contributed by Lev Berman
+
+- Fixed some django 2.0 deprecations.
+
+    Fix contributed by Éloi Rivard
+
+- Resolved some deprecation warnings in the test suite.
+
+    Fix contributed by Vytis Banaitis.
+
+- PeriodicTask admin list view changes:
+
+    - ``task``, ``args``, ``kwargs`` fields added to ``list_display``.
+
+    - Added ability to search tasks by ``name`` and ``task``.
+
+    - Tasks now ordered by ``('-enabled', 'name')``.
+
+    - Added enable/disable actions.
+
+    Contributed by Armenak Baburyan.
+
+.. _version-3.1.17:
+
+3.1.17
+======
+:release-date: 2015-10-09 04:02 P.M PDT
+
+- Adds Django migrations
+
+    ... warning::
+
+        Old South migrations have been moved to ``djcelery.south_migrations``,
+        so if you still use South you need to configure the new location
+        in ``settings.py``:
+
+        .. code-block:: python
+
+            SOUTH_MIGRATION_MODULES = {
+                'djcelery': 'djcelery.south_migrations',
+            }
+
+- ``djcelery.picklefield`` now compatible with Django 1.8
+
+    Fix taken upstream from ``django-picklefield``.
+
+- Fixed timezone issues when CELERY_ENABLE_UTC not set.
+
+    Fix contributed by Dmitriy Krasilnikov.
+
+- Fixed Python 3 compatibility issue in ``setup_loader``
+  (Issue #344, Issue #346).
+
+.. _version-3.1.16:
+
+3.1.16
+======
+:release-date: 2014-09-19 00:00 06:00 P.M UTC
+
+- Fixed a problem with management commands hanging when
+  ``djcelery`` is added to ``INSTALLED_APPS``.
+
+.. _version-3.1.15:
+
+3.1.15
+======
+:release-date: 2014-09-15 00:00 P.M UTC
+
+- Now depends on Celery 3.1.15
+
+- Better Python 3 compatibility
+
+    Contributed by Piotr Bulinski.
+
+- Commands now disables model validation when using Django > 1.7 (Issue #336).
+
+- No longer shadows the new ``--no-color`` option in Django 1.7.
+
+- Commands now have ``.stderr`` and ``.stdout`` attributes for Django 1.7
+  compatibility.
+
+    Fix contributed by artscoop.
+
+- ``WorkerState.is_alive()`` is now accurate with ``USE_TZ`` enabled.
+
+    Fix contributed by Rockallite Wulf.
+
 .. _version-3.1.10:
 
 3.1.10

@@ -1,4 +1,4 @@
-from __future__ import absolute_import
+from __future__ import absolute_import, unicode_literals
 
 from datetime import datetime, timedelta
 from itertools import count
@@ -16,22 +16,23 @@ from djcelery.compat import unicode
 
 
 def create_model_interval(schedule, **kwargs):
-    return create_model(interval=IntervalSchedule.from_schedule(schedule),
-                        **kwargs)
+    interval = IntervalSchedule.from_schedule(schedule)
+    interval.save()
+    return create_model(interval=interval, **kwargs)
 
 
 def create_model_crontab(schedule, **kwargs):
-    return create_model(crontab=CrontabSchedule.from_schedule(schedule),
-                        **kwargs)
+    crontab = CrontabSchedule.from_schedule(schedule)
+    crontab.save()
+    return create_model(crontab=crontab, **kwargs)
 
 
-_next_id_get = count(0)
-_next_id = lambda: next(_next_id_get)
+_ids = count(0)
 
 
 def create_model(Model=PeriodicTask, **kwargs):
-    entry = dict(name='thefoo{0}'.format(_next_id()),
-                 task='djcelery.unittest.add{0}'.format(_next_id()),
+    entry = dict(name='thefoo{0}'.format(next(_ids)),
+                 task='djcelery.unittest.add{0}'.format(next(_ids)),
                  args='[2, 2]',
                  kwargs='{"callback": "foo"}',
                  queue='xaz',
@@ -84,9 +85,9 @@ class test_ModelEntry(unittest.TestCase):
         self.assertTrue(e.schedule)
         self.assertEqual(e.total_run_count, 0)
         self.assertIsInstance(e.last_run_at, datetime)
-        self.assertDictContainsSubset({'queue': 'xaz',
-                                       'exchange': 'foo',
-                                       'routing_key': 'cpu'}, e.options)
+        self.assertEqual(e.options.get('queue'), 'xaz')
+        self.assertEqual(e.options.get('exchange'), 'foo')
+        self.assertEqual(e.options.get('routing_key'), 'cpu')
 
         right_now = celery.now()
         m2 = create_model_interval(schedule(timedelta(seconds=10)),
@@ -213,6 +214,35 @@ class test_DatabaseScheduler(unittest.TestCase):
         self.s._dirty.add(self.m1.name)
         self.assertRaises(RuntimeError, self.s.sync)
 
+    def test_dynamic_create_update_delete_task(self):
+        schedule_dict = {
+            'task': 'some_task',
+            'schedule': timedelta(seconds=5),
+            'args': ('arg1', 'arg2'),
+        }
+        task1_name = 'test_task 1'
+        task2_name = 'test_task 2'
+        schedulers.DatabaseScheduler.create_or_update_task(task1_name,
+                                                           **schedule_dict)
+        schedulers.DatabaseScheduler.create_or_update_task(task2_name,
+                                                           **schedule_dict)
+        PeriodicTask.objects.get(name=task1_name)  # assert not raises
+        PeriodicTask.objects.get(name=task2_name)
+        schedulers.DatabaseScheduler.create_or_update_task(task1_name,
+                                                           args=('arg3',))
+        self.assertEqual(PeriodicTask.objects.get(name=task1_name).args,
+                         u'["arg3"]')
+        schedulers.DatabaseScheduler.create_or_update_task(
+            task2_name, schedule=timedelta(10))
+        self.assertEqual(PeriodicTask.objects.get(name=task2_name).schedule,
+                         timedelta(10))
+        schedulers.DatabaseScheduler.delete_task(task1_name)
+        schedulers.DatabaseScheduler.delete_task(task2_name)
+        self.assertRaises(PeriodicTask.DoesNotExist,
+                          lambda: PeriodicTask.objects.get(name=task1_name))
+        self.assertRaises(PeriodicTask.DoesNotExist,
+                          lambda: PeriodicTask.objects.get(name=task2_name))
+
 
 class test_models(unittest.TestCase):
 
@@ -237,7 +267,7 @@ class test_models(unittest.TestCase):
     def test_PeriodicTask_unicode_interval(self):
         p = create_model_interval(schedule(timedelta(seconds=10)))
         self.assertEqual(unicode(p),
-                         '{0}: every 10.0 seconds'.format(p.name))
+                         '{0}: every 10 seconds'.format(p.name))
 
     def test_PeriodicTask_unicode_crontab(self):
         p = create_model_crontab(crontab(hour='4, 5', day_of_week='4, 5'))

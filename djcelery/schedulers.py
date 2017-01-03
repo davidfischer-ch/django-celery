@@ -95,7 +95,7 @@ class ModelEntry(ScheduleEntry):
     def save(self):
         # Object may not be synchronized, so only
         # change the fields we care about.
-        obj = self.model._default_manager.get(pk=self.model.pk)
+        obj = type(self.model)._default_manager.get(pk=self.model.pk)
         for field in self.save_fields:
             setattr(obj, field, getattr(self.model, field))
         obj.last_run_at = make_aware(obj.last_run_at)
@@ -126,12 +126,13 @@ class ModelEntry(ScheduleEntry):
         fields['queue'] = options.get('queue')
         fields['exchange'] = options.get('exchange')
         fields['routing_key'] = options.get('routing_key')
-        return cls(PeriodicTask._default_manager.update_or_create(
+        obj, _ = PeriodicTask._default_manager.update_or_create(
             name=name, defaults=fields,
-        ))
+        )
+        return cls(obj)
 
     def __repr__(self):
-        return '<ModelEntry: {0} {1}(*{2}, **{3}) {{4}}>'.format(
+        return '<ModelEntry: {0} {1}(*{2}, **{3}) {4}>'.format(
             safe_str(self.name), self.task, safe_repr(self.args),
             safe_repr(self.kwargs), self.schedule,
         )
@@ -181,6 +182,8 @@ class DatabaseScheduler(Scheduler):
 
             last, ts = self._last_timestamp, self.Changes.last_change()
         except DATABASE_ERRORS as exc:
+            # Close the connection when it is broken
+            transaction.get_connection().close_if_unusable_or_obsolete()
             error('Database gave error: %r', exc, exc_info=1)
             return False
         try:
@@ -198,7 +201,7 @@ class DatabaseScheduler(Scheduler):
         return new_entry
 
     def sync(self):
-        info('Writing entries...')
+        info('Writing entries (%s)...', len(self._dirty))
         _tried = set()
         try:
             with commit_on_success():
@@ -254,3 +257,17 @@ class DatabaseScheduler(Scheduler):
                     repr(entry) for entry in itervalues(self._schedule)),
                 )
         return self._schedule
+
+    @classmethod
+    def create_or_update_task(cls, name, **schedule_dict):
+        if 'schedule' not in schedule_dict:
+            try:
+                schedule_dict['schedule'] = \
+                    PeriodicTask._default_manager.get(name=name).schedule
+            except PeriodicTask.DoesNotExist:
+                pass
+        cls.Entry.from_entry(name, **schedule_dict)
+
+    @classmethod
+    def delete_task(cls, name):
+        PeriodicTask._default_manager.get(name=name).delete()

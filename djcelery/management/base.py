@@ -1,21 +1,18 @@
 from __future__ import absolute_import, unicode_literals
 
-import django
-import os
+import celery
+import djcelery
 import sys
 
 from django.core.management.base import BaseCommand
 
-import celery
-import djcelery
+from djcelery.compat import setenv
 
 DB_SHARED_THREAD = """\
 DatabaseWrapper objects created in a thread can only \
 be used in that same thread.  The object with alias '{0}' \
 was created in thread id {1} and this is thread id {2}.\
 """
-
-VALIDATE_MODELS = not django.VERSION >= (1, 7)
 
 
 def patch_thread_ident():
@@ -39,8 +36,8 @@ def patch_thread_ident():
                 self._thread_ident = _get_ident()
 
             def _validate_thread_sharing(self):
-                if (not self.allow_thread_sharing
-                        and self._thread_ident != _get_ident()):
+                if (not self.allow_thread_sharing and
+                        self._thread_ident != _get_ident()):
                     raise DatabaseError(
                         DB_SHARED_THREAD % (
                             self.alias, self._thread_ident, _get_ident()),
@@ -53,13 +50,41 @@ def patch_thread_ident():
         patch_thread_ident.called = True
     except ImportError:
         pass
+
+
 patch_thread_ident()
 
 
 class CeleryCommand(BaseCommand):
-    options = BaseCommand.option_list
+    options = ()
+    if hasattr(BaseCommand, 'option_list'):
+        options = BaseCommand.option_list
+    else:
+        def add_arguments(self, parser):
+            option_typemap = {
+                "string": str,
+                "int": int,
+                "float": float
+            }
+            for opt in self.option_list:
+                option = {k: v
+                          for k, v in opt.__dict__.items()
+                          if v is not None}
+                flags = (option.get("_long_opts", []) +
+                         option.get("_short_opts", []))
+                if option.get('default') == ('NO', 'DEFAULT'):
+                    option['default'] = None
+                if option.get("nargs") == 1:
+                    del option["nargs"]
+                del option["_long_opts"]
+                del option["_short_opts"]
+                if "type" in option:
+                    opttype = option["type"]
+                    option["type"] = option_typemap.get(opttype, opttype)
+                parser.add_argument(*flags, **option)
+
     skip_opts = ['--app', '--loader', '--config', '--no-color']
-    requires_model_validation = VALIDATE_MODELS
+    requires_system_checks = False
     keep_base_opts = False
     stdout, stderr = sys.stdout, sys.stderr
 
@@ -75,7 +100,7 @@ class CeleryCommand(BaseCommand):
         super(CeleryCommand, self).execute(*args, **options)
 
     def set_broker(self, broker):
-        os.environ['CELERY_BROKER_URL'] = broker
+        setenv('CELERY_BROKER_URL', broker)
 
     def run_from_argv(self, argv):
         self.handle_default_options(argv[2:])
@@ -90,7 +115,7 @@ class CeleryCommand(BaseCommand):
             # called with the resulting options parsed by optparse.
             if '--settings=' in arg:
                 _, settings_module = arg.split('=')
-                os.environ['DJANGO_SETTINGS_MODULE'] = settings_module
+                setenv('DJANGO_SETTINGS_MODULE', settings_module)
             elif '--pythonpath=' in arg:
                 _, pythonpath = arg.split('=')
                 sys.path.insert(0, pythonpath)

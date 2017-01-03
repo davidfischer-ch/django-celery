@@ -4,7 +4,7 @@
 
 .. image:: http://cloud.github.com/downloads/celery/celery/celery_128.png
 
-:Version: 3.1.9
+:Version: 3.2.0
 :Web: http://celeryproject.org/
 :Download: http://pypi.python.org/pypi/django-celery/
 :Source: http://github.com/celery/django-celery/
@@ -15,7 +15,7 @@
 
 .. warning::
 
-    **THIS PROJECT IS NO LONGER REQUIRED**
+    **THIS PROJECT IS NO LONGER REQUIRED IF YOU USE Celery Version 4.0**
 
     Please follow the new tutorial at:
 
@@ -92,16 +92,32 @@ To install using ``easy_install``,::
 
     $ easy_install django-celery
 
-You will then want to create the necessary tables. If you are using south_
-for schema migrations, you'll want to::
+You will then want to create the necessary tables. If you're using Django 1.7+
+or an older version with south_, you'll want to::
 
     $ python manage.py migrate djcelery
 
-For those who are not using south, a normal :command:`syncdb` will work::
+For Django 1.6 and older
+------------------------
+
+For older versions of Django without south_, a normal :command:`syncdb` will
+work::
 
     $ python manage.py syncdb
 
 .. _south: http://pypi.python.org/pypi/South/
+
+For South users
+------------------------
+
+If you are still using South, you should either:
+
+* Upgrade to South 1.0
+* If you can't upgrade to South 1.0 then add this to the Django settings::
+
+    SOUTH_MIGRATION_MODULES = {
+        'djcelery': 'djcelery.south_migrations',
+    }
 
 Downloading and installing from source
 --------------------------------------
@@ -129,7 +145,7 @@ Mailing list
 ------------
 
 For discussions about the usage, development, and future of celery,
-please join the `celery-users`_ mailing list. 
+please join the `celery-users`_ mailing list.
 
 .. _`celery-users`: http://groups.google.com/group/celery-users/
 

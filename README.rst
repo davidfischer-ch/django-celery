@@ -4,7 +4,7 @@
 
 .. image:: http://cloud.github.com/downloads/celery/celery/celery_128.png
 
-:Version: 3.2.0a1
+:Version: 3.2.0
 :Web: http://celeryproject.org/
 :Download: http://pypi.python.org/pypi/django-celery/
 :Source: http://github.com/celery/django-celery/
@@ -15,7 +15,8 @@
 
 .. warning::
 
-    **THIS PROJECT IS NO LONGER REQUIRED**
+    **THIS PROJECT IS ONLY REQUIRED IF YOU WANT TO USE DJANGO RESULT BACKEND
+    AND ADMIN INTEGRATION**
 
     Please follow the new tutorial at:
 
@@ -73,7 +74,6 @@ The `Celery User Manual`_ contains user guides, tutorials and an API
 reference. Also the `django-celery documentation`_, contains information
 about the Django integration.
 
-.. _`django-celery documentation`: http://django-celery.readthedocs.org/
 .. _`Celery User Manual`: http://docs.celeryproject.org/
 .. _`Getting started with django-celery`:
    http://docs.celeryproject.org/en/latest/django/first-steps-with-django.html
@@ -92,16 +92,12 @@ To install using ``easy_install``,::
 
     $ easy_install django-celery
 
-You will then want to create the necessary tables. If you are using south_
-for schema migrations, you'll want to::
+You will then want to create the necessary tables. If you generating
+schema migrations, you'll want to run::
 
     $ python manage.py migrate djcelery
 
-For those who are not using south, a normal ``syncdb`` will work::
 
-    $ python manage.py syncdb
-
-.. _south: http://pypi.python.org/pypi/South/
 
 Downloading and installing from source
 --------------------------------------

@@ -5,8 +5,6 @@ import sys
 from datetime import timedelta
 
 from billiard.einfo import ExceptionInfo
-import django
-from django.core.cache.backends.base import InvalidCacheBackendError
 
 from celery import result
 from celery import states
@@ -104,12 +102,7 @@ class test_custom_CacheBackend(unittest.TestCase):
         prev_backend = current_app.conf.CELERY_CACHE_BACKEND
         prev_module = sys.modules['djcelery.backends.cache']
 
-        if django.VERSION >= (1, 3):
-            current_app.conf.CELERY_CACHE_BACKEND = \
-                'django.core.cache.backends.dummy.DummyCache'
-        else:
-            # Django 1.2 used 'scheme://' style cache backends
-            current_app.conf.CELERY_CACHE_BACKEND = 'dummy://'
+        current_app.conf.CELERY_CACHE_BACKEND = 'dummy'
         sys.modules.pop('djcelery.backends.cache')
         try:
             from djcelery.backends.cache import cache
@@ -120,34 +113,3 @@ class test_custom_CacheBackend(unittest.TestCase):
         finally:
             current_app.conf.CELERY_CACHE_BACKEND = prev_backend
             sys.modules['djcelery.backends.cache'] = prev_module
-
-
-class test_MemcacheWrapper(unittest.TestCase):
-
-    def test_memcache_wrapper(self):
-
-        try:
-            from django.core.cache.backends import memcached
-            from django.core.cache.backends import locmem
-        except InvalidCacheBackendError:
-            sys.stderr.write(
-                '\n* Memcache library is not installed. Skipping test.\n')
-            return
-        try:
-            prev_cache_cls = memcached.CacheClass
-            memcached.CacheClass = locmem.CacheClass
-        except AttributeError:
-            return
-        prev_backend_module = sys.modules.pop('djcelery.backends.cache')
-        try:
-            from djcelery.backends.cache import cache
-            key = 'cu.test_memcache_wrapper'
-            val = 'The quick brown fox.'
-            default = 'The lazy dog.'
-
-            self.assertEqual(cache.get(key, default=default), default)
-            cache.set(key, val)
-            self.assertEqual(cache.get(key, default=default), val)
-        finally:
-            memcached.CacheClass = prev_cache_cls
-            sys.modules['djcelery.backends.cache'] = prev_backend_module

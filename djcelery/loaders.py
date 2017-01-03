@@ -11,7 +11,6 @@ from celery import signals
 from celery.datastructures import DictAttribute
 from celery.loaders.base import BaseLoader
 
-import django
 from django import db
 from django.conf import settings
 from django.core import cache
@@ -20,7 +19,6 @@ from django.core.mail import mail_admins
 from .utils import DATABASE_ERRORS, now
 
 _RACE_PROTECTION = False
-NO_TZ = django.VERSION < (1, 4)
 
 
 def _maybe_close_fd(fh):
@@ -62,10 +60,6 @@ class DjangoLoader(BaseLoader):
                    getattr(settings, 'CELERY_BACKEND', None))
         if not backend:
             settings.CELERY_RESULT_BACKEND = 'database'
-        if NO_TZ:
-            if getattr(settings, 'CELERY_ENABLE_UTC', None):
-                warn('CELERY_ENABLE_UTC requires Django 1.4+')
-            settings.CELERY_ENABLE_UTC = False
         return DictAttribute(settings)
 
     def _close_database(self):
@@ -196,7 +190,9 @@ def find_related_module(app, related_name):
         return
 
     try:
-        imp.find_module(related_name, app_path)
+        f, _, _ = imp.find_module(related_name, app_path)
+        # f is returned None when app_path is a module
+        f and f.close()
     except ImportError:
         return
 

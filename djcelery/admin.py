@@ -7,6 +7,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.contrib.admin import helpers
 from django.contrib.admin.views import main as main_views
+from django.forms.widgets import Select
 from django.shortcuts import render_to_response
 from django.template import RequestContext
 from django.utils.html import escape
@@ -15,15 +16,17 @@ from django.utils.translation import ugettext_lazy as _
 from celery import current_app
 from celery import states
 from celery.task.control import broadcast, revoke, rate_limit
+from celery.utils import cached_property
 from celery.utils.text import abbrtask
 
 from .admin_utils import action, display_field, fixedwidth
 from .models import (
     TaskState, WorkerState,
     PeriodicTask, IntervalSchedule, CrontabSchedule,
+    PeriodicTasks
 )
 from .humanize import naturaldate
-from .utils import is_database_scheduler
+from .utils import is_database_scheduler, make_aware
 
 try:
     from django.utils.encoding import force_text
@@ -66,13 +69,15 @@ def node_state(node):
 def eta(task):
     if not task.eta:
         return '<span style="color: gray;">none</span>'
-    return escape(task.eta)
+    return escape(make_aware(task.eta))
 
 
 @display_field(_('when'), 'tstamp')
 def tstamp(task):
+    # convert to local timezone
+    value = make_aware(task.tstamp)
     return '<div title="{0}">{1}</div>'.format(
-        escape(str(task.tstamp)), escape(naturaldate(task.tstamp)),
+        escape(str(value)), escape(naturaldate(value)),
     )
 
 
@@ -234,6 +239,7 @@ class WorkerMonitor(ModelMonitor):
         actions.pop('delete_selected', None)
         return actions
 
+
 admin.site.register(TaskState, TaskMonitor)
 admin.site.register(WorkerState, WorkerMonitor)
 
@@ -241,62 +247,90 @@ admin.site.register(WorkerState, WorkerMonitor)
 # ### Periodic Tasks
 
 
-class LaxChoiceField(forms.ChoiceField):
+class TaskSelectWidget(Select):
+    celery_app = current_app
+    _choices = None
+
+    def tasks_as_choices(self):
+        _ = self._modules  # noqa
+        tasks = list(sorted(name for name in self.celery_app.tasks
+                            if not name.startswith('celery.')))
+        return (('', ''), ) + tuple(zip(tasks, tasks))
+
+    @property
+    def choices(self):
+        if self._choices is None:
+            self._choices = self.tasks_as_choices()
+        return self._choices
+
+    @choices.setter
+    def choices(self, _):
+        # ChoiceField.__init__ sets ``self.choices = choices``
+        # which would override ours.
+        pass
+
+    @cached_property
+    def _modules(self):
+        self.celery_app.loader.import_default_modules()
+
+
+class TaskChoiceField(forms.ChoiceField):
+    widget = TaskSelectWidget
 
     def valid_value(self, value):
         return True
 
 
-def periodic_task_form():
-    current_app.loader.import_default_modules()
-    tasks = list(sorted(name for name in current_app.tasks
-                        if not name.startswith('celery.')))
-    choices = (('', ''), ) + tuple(zip(tasks, tasks))
+class PeriodicTaskForm(forms.ModelForm):
+    regtask = TaskChoiceField(label=_('Task (registered)'),
+                              required=False)
+    task = forms.CharField(label=_('Task (custom)'), required=False,
+                           max_length=200)
 
-    class PeriodicTaskForm(forms.ModelForm):
-        regtask = LaxChoiceField(label=_('Task (registered)'),
-                                 choices=choices, required=False)
-        task = forms.CharField(label=_('Task (custom)'), required=False,
-                               max_length=200)
+    class Meta:
+        model = PeriodicTask
+        exclude = ()
 
-        class Meta:
-            model = PeriodicTask
-            exclude = ()
+    def clean(self):
+        data = super(PeriodicTaskForm, self).clean()
+        regtask = data.get('regtask')
+        if regtask:
+            data['task'] = regtask
+        if not data['task']:
+            exc = forms.ValidationError(_('Need name of task'))
+            self._errors['task'] = self.error_class(exc.messages)
+            raise exc
+        return data
 
-        def clean(self):
-            data = super(PeriodicTaskForm, self).clean()
-            regtask = data.get('regtask')
-            if regtask:
-                data['task'] = regtask
-            if not data['task']:
-                exc = forms.ValidationError(_('Need name of task'))
-                self._errors['task'] = self.error_class(exc.messages)
-                raise exc
-            return data
+    def _clean_json(self, field):
+        value = self.cleaned_data[field]
+        try:
+            loads(value)
+        except ValueError as exc:
+            raise forms.ValidationError(
+                _('Unable to parse JSON: %s') % exc,
+            )
+        return value
 
-        def _clean_json(self, field):
-            value = self.cleaned_data[field]
-            try:
-                loads(value)
-            except ValueError as exc:
-                raise forms.ValidationError(
-                    _('Unable to parse JSON: %s') % exc,
-                )
-            return value
+    def clean_args(self):
+        return self._clean_json('args')
 
-        def clean_args(self):
-            return self._clean_json('args')
-
-        def clean_kwargs(self):
-            return self._clean_json('kwargs')
-
-    return PeriodicTaskForm
+    def clean_kwargs(self):
+        return self._clean_json('kwargs')
 
 
 class PeriodicTaskAdmin(admin.ModelAdmin):
+    form = PeriodicTaskForm
     model = PeriodicTask
-    form = periodic_task_form()
-    list_display = ('__unicode__', 'enabled')
+    list_display = (
+        'enabled',
+        '__unicode__',
+        'task',
+        'args',
+        'kwargs',
+    )
+    search_fields = ('name', 'task')
+    ordering = ('-enabled', 'name')
     fieldsets = (
         (None, {
             'fields': ('name', 'regtask', 'task', 'enabled'),
@@ -315,10 +349,23 @@ class PeriodicTaskAdmin(admin.ModelAdmin):
             'classes': ('extrapretty', 'wide', 'collapse'),
         }),
     )
+    actions = ['enable_tasks',
+               'disable_tasks']
 
-    def __init__(self, *args, **kwargs):
-        super(PeriodicTaskAdmin, self).__init__(*args, **kwargs)
-        self.form = periodic_task_form()
+    def update_periodic_tasks(self):
+        dummy_periodic_task = PeriodicTask()
+        dummy_periodic_task.no_changes = False
+        PeriodicTasks.changed(dummy_periodic_task)
+
+    @action(_('Enable selected periodic tasks'))
+    def enable_tasks(self, request, queryset):
+        queryset.update(enabled=True)
+        self.update_periodic_tasks()
+
+    @action(_('Disable selected periodic tasks'))
+    def disable_tasks(self, request, queryset):
+        queryset.update(enabled=False)
+        self.update_periodic_tasks()
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}

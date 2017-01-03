@@ -74,7 +74,7 @@ class ExtendedQuerySet(QuerySet):
             fields.update(kwargs)
             update_model_with_dict(obj, fields)
 
-        return obj
+        return obj, created
 
 
 class ExtendedManager(models.Manager):
@@ -237,9 +237,4 @@ class TaskStateManager(ExtendedManager):
 
     def purge(self):
         with commit_on_success():
-            meta = self.model._meta
-            cursor = self.connection_for_write().cursor()
-            cursor.execute(
-                'DELETE FROM {0.db_table} WHERE hidden=%s'.format(meta),
-                (True, ),
-            )
+            self.model.objects.filter(hidden=True).delete()

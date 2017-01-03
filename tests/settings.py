@@ -1,17 +1,18 @@
 # Django settings for testproj project.
 
+import os
+import sys
 import warnings
 warnings.filterwarnings(
     'error', r'DateTimeField received a naive datetime',
     RuntimeWarning, r'django\.db\.models\.fields')
 
-import os
-import sys
 # import source code dir
-sys.path.insert(0, os.getcwd())
-sys.path.insert(0, os.path.join(os.getcwd(), os.pardir))
+here = os.path.abspath(os.path.dirname(__file__))
+sys.path.insert(0, here)
+sys.path.insert(0, os.path.join(here, os.pardir))
 
-import djcelery
+import djcelery  # noqa
 djcelery.setup_loader()
 
 NO_NOSE = os.environ.get('DJCELERY_NO_NOSE', False)
@@ -19,7 +20,6 @@ NO_NOSE = os.environ.get('DJCELERY_NO_NOSE', False)
 SITE_ID = 300
 
 DEBUG = True
-TEMPLATE_DEBUG = DEBUG
 
 ROOT_URLCONF = 'tests.urls'
 SECRET_KEY = 'skskqlqlaskdsd'
@@ -32,7 +32,7 @@ AUTOCOMMIT = True
 
 if not NO_NOSE:
     TEST_RUNNER = 'django_nose.NoseTestSuiteRunner'
-here = os.path.abspath(os.path.dirname(__file__))
+
 COVERAGE_EXCLUDE_MODULES = (
     'djcelery',
     'djcelery.tests.*',
@@ -75,6 +75,22 @@ DATABASES = {
     },
 }
 
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    },
+    'dummy': {
+        'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+    },
+}
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'APP_DIRS': True,
+    },
+]
+
 INSTALLED_APPS = (
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -92,3 +108,4 @@ CELERY_SEND_TASK_ERROR_EMAILS = False
 
 USE_TZ = True
 TIME_ZONE = 'UTC'
+MIDDLEWARE = MIDDLEWARE_CLASSES = []
